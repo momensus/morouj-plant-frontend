@@ -1,10 +1,8 @@
-# Cloudflare Pages redirects/proxies
-# This deployment publishes the repo ROOT (assets at /index.html, /icons/, ...).
+# Cloudflare Pages redirects - this deployment publishes the repo ROOT
+# (assets at /index.html, /icons/, ...).
 
-# 1) Proxy all /api/* requests to the Render backend.
-#    200 = proxy rewrite; the browser stays on your Pages domain (no CORS).
-#    TODO: replace <YOUR-RENDER-URL> with your deployed Render service URL.
-/api/* https://morouj-plant-backend.onrender.com/api/:splat 200
-
-# 2) SPA fallback: any unknown path serves the shell (index.html).
+# SPA fallback: any unknown path serves the shell (index.html).
+# Note: the /api/* calls go DIRECTLY to https://morouj-plant-backend.onrender.com
+# via config.js (MOROUJ_API_BASE + CORS); Cloudflare's _redirects proxy does
+# not support external domains, so no proxy rule is used here.
 /* /index.html 200
