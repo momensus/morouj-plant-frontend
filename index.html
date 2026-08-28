@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Morouj Commodities LTD - Tomato Paste Process Monitoring</title>
+
+    <!-- ═══════════════════════════════════════════════════════
+         PWA — Progressive Web App meta tags
+    ════════════════════════════════════════════════════════ -->
+
+    <!-- Web App Manifest (required for Chrome install prompt) -->
+    <link rel="manifest" href="/manifest.json">
+
+    <!-- Theme colour shown in Android Chrome address bar & task switcher -->
+    <meta name="theme-color" content="#133E33">
+
+    <!-- App description for search engines & PWA stores -->
+    <meta name="description" content="Real-time tomato paste process monitoring dashboard for Morouj Commodities LTD.">
+
+    <!-- Standalone full-screen mode on Android (legacy hint) -->
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <!-- ── Apple / iOS PWA tags ─────────────────────────────── -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Morouj Plant">
+    <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+
+    <!-- ── Open Graph (share preview tags) ──────────────────── -->
+    <meta property="og:type"        content="website">
+    <meta property="og:title"       content="Morouj Commodities LTD – Tomato Paste Monitoring">
+    <meta property="og:description" content="Real-time tomato paste process monitoring dashboard.">
+    <meta property="og:image"       content="/icons/icon-512x512.png">
+
+    <!-- ── Favicon ──────────────────────────────────────────── -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192x192.png">
+    <link rel="icon" type="image/png" sizes="32x32"   href="/icons/icon-128x128.png">
+
+    <!-- ── Service Worker Registration ─────────────────────── -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker
+                    .register('/sw.js', { scope: '/' })
+                    .then(reg => console.log('[PWA] SW registered, scope:', reg.scope))
+                    .catch(err => console.warn('[PWA] SW registration failed:', err));
+            });
+        }
+    </script>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        morouj: {
+                            forest: '#133E33',
+                            'forest-dark': '#0C2B23',
+                            'forest-light': '#1D5244',
+                            green: '#48A635',
+                            'green-light': '#EBF5E9',
+                            'green-hover': '#3D932B',
+                            lime: '#8CC63F',
+                            orange: '#F15A24',
+                            'orange-dark': '#D44413',
+                            'orange-light': '#FFF0EA',
+                            'orange-hover': '#DE4A15',
+                            gold: '#FBB03B',
+                            'gold-light': '#FEF8EB',
+                            cream: '#F4F7F5'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Offline Queue Module (IndexedDB-backed, must load before app.js) -->
+    <script src="/offline-queue.js"></script>
+
+    <!-- Frontend Configuration (API base URL) - must load before app.js -->
+    <script src="/config.js"></script>
+
+    <!-- Custom Brand Styles -->
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="bg-[#F6F9F7] text-slate-800 min-h-screen flex flex-col antialiased select-none md:select-auto">
+
+    <!-- TOP APPLICATION HEADER -->
+    <header id="app-header" class="bg-morouj-forest text-white shadow-md sticky top-0 z-50 border-b border-morouj-forest-light">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between">
+            
+            <!-- Brand & Official Logo -->
+            <div class="flex items-center space-x-3.5">
+                <div class="bg-white p-1.5 rounded-xl shadow-sm border border-morouj-forest-light/30 flex items-center justify-center">
+                    <img src="/logo.png" alt="Morouj Logo" class="h-9 sm:h-10 w-auto object-contain">
+                </div>
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <span class="font-black tracking-wide text-base sm:text-lg text-white">MOROUJ COMMODITIES LTD</span>
+                        <span class="bg-morouj-orange/20 text-morouj-gold text-[11px] font-bold px-2 py-0.5 rounded border border-morouj-orange/40 hidden sm:inline-block">Tomato Paste Plant</span>
+                    </div>
+                    <p class="text-xs text-emerald-200/90 font-medium">Process Monitoring & Downtime Tracking System</p>
+                </div>
+            </div>
+
+            <!-- Plant Live Clock & Current Shift Hour -->
+            <div class="hidden md:flex items-center space-x-4 bg-morouj-forest-dark/70 backdrop-blur px-3.5 py-1.5 rounded-xl border border-morouj-forest-light">
+                <div class="flex items-center space-x-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-morouj-lime pulse-live"></span>
+                    <span id="header-clock" class="text-xs font-bold mono text-morouj-lime">12:00:00</span>
+                </div>
+                <div class="h-4 w-px bg-morouj-forest-light"></div>
+                <div class="text-xs">
+                    <span class="text-slate-300">Shift Slot: </span>
+                    <span id="header-current-slot" class="font-bold text-morouj-gold mono">11:00 - 12:00</span>
+                </div>
+            </div>
+
+            <!-- User Status & Logout -->
+            <div class="flex items-center space-x-3" id="header-user-section">
+                <div id="user-profile-badge" class="hidden flex items-center space-x-3">
+                    <div class="text-right hidden sm:block">
+                        <div id="user-display-name" class="text-xs font-bold text-white">Ahmed</div>
+                        <div id="user-role-label" class="text-[11px] font-semibold text-morouj-gold uppercase tracking-wider">Operator</div>
+                    </div>
+
+                    <!-- Push notifications indicator & toggle button -->
+                    <button
+                        id="push-toggle-btn"
+                        title="Web Push Notifications – click to toggle alerts"
+                        onclick="togglePushNotifications()"
+                        class="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold bg-morouj-forest-dark hover:bg-morouj-forest-light text-slate-200 hover:text-white border border-morouj-forest-light rounded-xl transition"
+                    >
+                        <span id="push-status-icon">🔔</span>
+                        <span id="push-status-text" class="hidden sm:inline">Push Alerts</span>
+                    </button>
+
+                    <!-- Offline queue indicator – visible only when items are queued -->
+                    <button
+                        id="offline-queue-btn"
+                        title="Offline queue – click to retry upload"
+                        onclick="window.OfflineQueue && window.OfflineQueue.flush()"
+                        class="relative flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl transition"
+                    >
+                        <span>📴</span>
+                        <span id="offline-queue-badge" class="hidden min-w-[18px] text-center bg-amber-500 text-white text-[10px] font-black rounded-full px-1.5 py-0.5 leading-none">0</span>
+                        <span class="hidden sm:inline">Queued</span>
+                    </button>
+
+                    <button onclick="handleLogout()" title="Logout" class="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold text-slate-200 hover:text-white bg-morouj-forest-dark hover:bg-morouj-forest-light rounded-xl transition border border-morouj-forest-light">
+                        <i data-lucide="log-out" class="w-4 h-4"></i>
+                        <span>Logout</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN APP CONTAINER -->
+    <main class="flex-grow max-w-7xl w-full mx-auto p-3 sm:p-6">
+
+        <!-- ============================================== -->
+        <!-- VIEW 1: REGULAR LOGIN SCREEN (CLEAN & SIMPLE) -->
+        <!-- ============================================== -->
+        <section id="view-login" class="max-w-md mx-auto my-10 sm:my-14">
+            <div class="bg-white rounded-3xl shadow-xl border border-emerald-900/10 p-6 sm:p-8 relative overflow-hidden">
+                <!-- Top Brand Accent -->
+                <div class="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-morouj-green via-morouj-gold to-morouj-orange"></div>
+
+                <div class="text-center mb-6 pt-2">
+                    <div class="w-24 h-24 bg-white rounded-2xl p-2 mx-auto mb-2 flex items-center justify-center">
+                        <img src="/logo.png" alt="Morouj" class="max-h-full max-w-full object-contain">
+                    </div>
+                    <h2 class="text-2xl font-black text-morouj-forest">Plant System Login</h2>
+                    <p class="text-xs font-semibold text-slate-500 mt-1">Morouj Commodities LTD Tomato Paste Plant</p>
+                </div>
+
+                <form onsubmit="handleManualLogin(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1.5">Username</label>
+                        <div class="relative">
+                            <input type="text" id="login-username" required placeholder="Enter username" class="w-full pl-10 pr-3.5 py-2.5 border border-slate-300 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-morouj-green focus:border-morouj-green outline-none">
+                            <i data-lucide="user" class="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5"></i>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1.5">Password or 4-Digit PIN</label>
+                        <div class="relative">
+                            <input type="password" id="login-password" required placeholder="••••" class="w-full pl-10 pr-3.5 py-2.5 border border-slate-300 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-morouj-green focus:border-morouj-green outline-none">
+                            <i data-lucide="lock" class="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5"></i>
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full py-3.5 bg-morouj-green hover:bg-morouj-green-hover text-white font-black text-sm rounded-xl shadow-lg transition flex items-center justify-center space-x-2">
+                        <i data-lucide="log-in" class="w-4 h-4"></i>
+                        <span>Sign In to Plant Portal</span>
+                    </button>
+                </form>
+
+                <div class="mt-6 pt-4 border-t border-slate-100 text-center text-xs text-slate-400 font-medium">
+                    Protected Industrial Portal • Morouj Process Engineering
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ============================================== -->
+        <!-- VIEW 2: DYNAMIC OPERATOR DASHBOARD -->
+        <!-- ============================================== -->
+        <section id="view-operator" class="hidden max-w-3xl mx-auto space-y-5">
+            
+            <!-- Operator Greeting & Status -->
+            <div class="bg-white rounded-3xl p-5 shadow-sm border border-emerald-900/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="flex items-center space-x-4">
+                    <div class="w-12 h-12 rounded-2xl bg-morouj-green-light text-morouj-forest flex items-center justify-center text-2xl shadow-inner font-bold border border-morouj-green/20">
+                        👨‍🔧
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <h1 id="op-user-name" class="text-xl sm:text-2xl font-black text-morouj-forest">Operator Workstation</h1>
+                            <span class="text-[11px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-morouj-green-light text-morouj-forest border border-morouj-green/30">Active</span>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-0.5">Submit your assigned hourly readings and log line downtime.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- OPERATOR SHIFT MODE TOGGLE & HOURLY REMINDERS CARD -->
+            <div class="bg-white rounded-3xl p-5 shadow-sm border border-emerald-900/10 space-y-3">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <h3 class="text-sm font-extrabold text-morouj-forest uppercase tracking-wider">Shift Mode Setting</h3>
+                            <span id="op-shift-status-pill" class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">Reminders Active</span>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-0.5">Hourly reading reminders are only triggered during your active shift.</p>
+                    </div>
+                    
+                    <button type="button" onclick="testOperatorPushReminder()" class="self-start sm:self-auto px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 flex items-center space-x-1.5 transition">
+                        <span>🔔</span>
+                        <span>Test Hourly Reminder</span>
+                    </button>
+                </div>
+
+                <!-- Shift Mode Selector Buttons -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <button type="button" id="btn-shift-morning" onclick="setOperatorShiftMode('morning')" class="p-3.5 rounded-2xl border-2 transition flex items-center space-x-3.5 text-left border-morouj-green bg-morouj-green/10 text-morouj-forest">
+                        <span class="text-2xl p-2 bg-white rounded-xl shadow-sm">☀️</span>
+                        <div>
+                            <div class="text-xs font-black uppercase tracking-wider">Morning Shift</div>
+                            <div class="text-xs font-bold opacity-80">7:00 AM – 7:00 PM (12 hrs)</div>
+                        </div>
+                    </button>
+
+                    <button type="button" id="btn-shift-night" onclick="setOperatorShiftMode('night')" class="p-3.5 rounded-2xl border-2 transition flex items-center space-x-3.5 text-left border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300">
+                        <span class="text-2xl p-2 bg-white rounded-xl shadow-sm">🌙</span>
+                        <div>
+                            <div class="text-xs font-black uppercase tracking-wider">Night Shift</div>
+                            <div class="text-xs font-bold opacity-80">7:00 PM – 7:00 AM (12 hrs)</div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+
+            <!-- Hour Slot Selector & Timeliness Grace Window Status -->
+            <div class="bg-morouj-forest text-white rounded-3xl p-5 shadow-md border border-morouj-forest-light">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-emerald-200 uppercase tracking-wider mb-1">Operational Hour Slot</label>
+                        <div class="flex items-center space-x-2">
+                            <select id="op-hour-select" onchange="checkTimelinessWarning()" class="bg-morouj-forest-dark text-white font-bold text-sm sm:text-base border border-morouj-forest-light rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-morouj-green">
+                                <!-- Generated by JS for all 24 hours -->
+                            </select>
+                            <span id="op-shift-badge" class="text-xs font-bold px-2.5 py-1 rounded-lg bg-morouj-gold/20 text-morouj-gold border border-morouj-gold/40">
+                                Morning Shift
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Timeliness Status Banner for selected slot -->
+                    <div id="op-timeliness-status-box" class="bg-morouj-forest-dark/80 border border-morouj-forest-light rounded-xl p-3 flex items-center space-x-3">
+                        <div id="op-timeliness-icon" class="w-8 h-8 rounded-lg bg-morouj-green/20 text-morouj-lime flex items-center justify-center font-bold">
+                            ✓
+                        </div>
+                        <div>
+                            <div id="op-timeliness-text" class="text-xs font-bold text-morouj-lime">Within 15-min Window</div>
+                            <div id="op-timeliness-sub" class="text-[11px] text-slate-300">Due within 15 min of hour end</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DOWNTIME TRACKING CARD (Shown if downtime_tracking is enabled) -->
+            <div id="card-downtime" class="bg-white rounded-3xl p-6 shadow-sm border border-emerald-900/10 space-y-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <span class="text-2xl p-2 bg-rose-50 rounded-2xl border border-rose-200">⏱️</span>
+                        <div>
+                            <h3 class="text-base font-black text-slate-900">Line Downtime Tracking</h3>
+                            <p class="text-xs text-slate-500">Toggle live when line stops, or enter manual duration</p>
+                        </div>
+                    </div>
+                    <button type="button" onclick="toggleManualDowntimeSection()" class="text-xs font-bold text-morouj-forest hover:text-morouj-green underline flex items-center space-x-1">
+                        <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                        <span>Manual Time Entry</span>
+                    </button>
+                </div>
+
+                <!-- Live Toggle & Stopwatch -->
+                <div id="downtime-live-box" class="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div>
+                        <div class="text-xs font-bold text-slate-500 uppercase tracking-wider">Live Stoppage Status</div>
+                        <div id="downtime-status-text" class="text-sm font-black text-slate-700 mt-0.5">Line is currently RUNNING</div>
+                        <div id="downtime-timer" class="text-2xl font-black mono text-slate-400 mt-1">00:00:00</div>
+                    </div>
+                    <button type="button" id="btn-toggle-downtime" onclick="handleDowntimeToggle()" class="w-full sm:w-auto px-6 py-3.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-black text-sm rounded-xl shadow-md transition flex items-center justify-center space-x-2">
+                        <span id="btn-toggle-downtime-icon">🔴</span>
+                        <span id="btn-toggle-downtime-text">START DOWNTIME</span>
+                    </button>
+                </div>
+
+                <!-- Manual Entry Form (Collapsible) -->
+                <div id="downtime-manual-form" class="hidden p-4 rounded-2xl bg-morouj-gold-light border border-morouj-gold/40 space-y-3">
+                    <div class="text-xs font-extrabold text-amber-900 uppercase">Retroactive Downtime Entry</div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-700 mb-1">Start Time</label>
+                            <input type="time" id="manual-dt-start" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-700 mb-1">Finish Time</label>
+                            <input type="time" id="manual-dt-end" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-700 mb-1">Reason / Station</label>
+                            <input type="text" id="manual-dt-reason" placeholder="e.g. Valve leak, power" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold">
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-2 pt-1">
+                        <button type="button" onclick="toggleManualDowntimeSection()" class="px-3 py-1.5 bg-white text-slate-600 text-xs font-bold rounded-lg border border-slate-200">Cancel</button>
+                        <button type="button" onclick="submitManualDowntime()" class="px-4 py-1.5 bg-morouj-forest hover:bg-morouj-forest-light text-white text-xs font-bold rounded-lg shadow">Save Downtime</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ADAPTIVE DYNAMIC OPERATOR READINGS GRID -->
+            <div class="bg-white rounded-3xl p-6 shadow-sm border border-emerald-900/10 space-y-6">
+                <div>
+                    <h3 class="text-base font-black text-morouj-forest">Assigned Process Measurements</h3>
+                    <p class="text-xs text-slate-500">Enter measurements for the current shift hour slot.</p>
+                </div>
+
+                <div id="dynamic-readings-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full min-w-0">
+                    <!-- Populated dynamically by JS according to user.permissions -->
+                </div>
+
+                <!-- BIG CONFIRMATION & SUBMIT BUTTON -->
+                <button type="button" onclick="submitFlexibleOperatorData()" class="w-full py-4 bg-gradient-to-r from-morouj-green to-morouj-lime hover:from-morouj-green-hover hover:to-morouj-green active:scale-[0.99] text-white font-black text-lg rounded-2xl shadow-lg transition flex items-center justify-center space-x-3">
+                    <i data-lucide="check-circle-2" class="w-6 h-6"></i>
+                    <span>CONFIRM & SUBMIT HOURLY LOG</span>
+                </button>
+            </div>
+
+            <!-- Recent Submissions Log -->
+            <div class="bg-white rounded-3xl p-5 shadow-sm border border-emerald-900/10">
+                <h3 class="text-sm font-extrabold text-morouj-forest uppercase tracking-wider mb-3 flex items-center justify-between">
+                    <span>Recent Submissions Log</span>
+                    <span class="text-xs text-slate-400 font-normal">Auto-verified</span>
+                </h3>
+                <div id="op-recent-submissions-list" class="space-y-2 text-sm text-slate-600">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ============================================== -->
+        <!-- VIEW 3: MANAGEMENT DASHBOARD (CONFIGURABLE CARDS & CHARTS) -->
+        <!-- ============================================== -->
+        <section id="view-management" class="hidden space-y-6">
+            
+            <!-- Dashboard Controls & Date Selection -->
+            <div class="bg-white rounded-3xl p-4 sm:p-5 shadow-sm border border-emerald-900/10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 class="text-xl sm:text-2xl font-black text-morouj-forest flex items-center space-x-2">
+                        <span>Production & Process Analytics</span>
+                        <span class="text-xs bg-morouj-green-light text-morouj-forest font-extrabold px-2.5 py-0.5 rounded-full border border-morouj-green/30">Manager Dashboard</span>
+                    </h1>
+                    <p class="text-xs text-slate-500 mt-0.5">Real-time Brix concentration, temperature profiles, and plant downtime</p>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-3">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Production Date</label>
+                        <input type="date" id="mgmt-date-picker" onchange="loadManagementDashboard()" class="bg-slate-100 font-bold text-sm px-3 py-1.5 rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-morouj-green">
+                    </div>
+
+                    <!-- Export Buttons (Toggled by manager permissions) -->
+                    <div id="mgmt-export-controls" class="flex items-end space-x-2 pt-3 sm:pt-0">
+                        <button onclick="exportData('xlsx')" class="flex items-center space-x-1.5 px-3.5 py-2 bg-morouj-forest hover:bg-morouj-forest-light text-white font-bold text-xs rounded-xl shadow transition">
+                            <i data-lucide="file-spreadsheet" class="w-4 h-4 text-morouj-lime"></i>
+                            <span>Excel</span>
+                        </button>
+                        <button onclick="exportData('csv')" class="flex items-center space-x-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl shadow transition">
+                            <i data-lucide="download" class="w-4 h-4"></i>
+                            <span>CSV</span>
+                        </button>
+                        <button onclick="loadManagementDashboard()" title="Refresh" class="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition">
+                            <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SUMMARY KPI / INFORMATION BOXES (Dynamically Toggled) -->
+            <div id="mgmt-kpi-container" class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+                
+                <!-- KPI 1: Average Brix -->
+                <div id="kpi-box-avg-brix" class="bg-white p-4 rounded-3xl shadow-sm border border-emerald-900/10 border-t-4 border-t-morouj-gold">
+                    <div class="flex items-center justify-between text-slate-400 mb-1">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">Day Average Brix</span>
+                        <span class="text-lg">🎯</span>
+                    </div>
+                    <div id="kpi-avg-brix" class="text-xl sm:text-2xl font-black text-morouj-forest">-- °Bx</div>
+                    <div class="text-xs font-semibold text-slate-500 mt-0.5">Target: 25.5° Brix</div>
+                </div>
+
+                <!-- KPI 2: Average Temperatures -->
+                <div id="kpi-box-avg-temp" class="bg-white p-4 rounded-3xl shadow-sm border border-emerald-900/10 border-t-4 border-t-morouj-orange">
+                    <div class="flex items-center justify-between text-slate-400 mb-1">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">Avg Cooker Temp</span>
+                        <span class="text-lg">🔥</span>
+                    </div>
+                    <div id="kpi-avg-cooker-temp" class="text-xl sm:text-2xl font-black text-morouj-orange-dark">-- °C</div>
+                    <div id="kpi-avg-filler-temp" class="text-xs font-semibold text-slate-500 mt-0.5">Filler: -- °C</div>
+                </div>
+
+                <!-- KPI 3: Total Downtime -->
+                <div id="kpi-box-downtime" class="bg-white p-4 rounded-3xl shadow-sm border border-emerald-900/10 border-t-4 border-t-rose-500">
+                    <div class="flex items-center justify-between text-slate-400 mb-1">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">Total Downtime</span>
+                        <span class="text-lg">⏱️</span>
+                    </div>
+                    <div id="kpi-total-downtime" class="text-xl sm:text-2xl font-black text-rose-600">0 min</div>
+                    <div id="kpi-downtime-events-count" class="text-xs font-semibold text-slate-500 mt-0.5">0 Stoppages Logged</div>
+                </div>
+
+                <!-- KPI 4: Finished Product Produced -->
+                <div id="kpi-box-product" class="bg-white p-4 rounded-3xl shadow-sm border border-emerald-900/10 border-t-4 border-t-morouj-green">
+                    <div class="flex items-center justify-between text-slate-400 mb-1">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">Finished Product</span>
+                        <span class="text-lg">🥫</span>
+                    </div>
+                    <div id="kpi-product-produced" class="text-xl sm:text-2xl font-black text-morouj-green">0 kg</div>
+                    <div id="kpi-pallets-breakdown" class="text-xs font-semibold text-slate-500 mt-0.5">0 Can / 0 Pkt Pallets</div>
+                </div>
+
+                <!-- KPI 5: Raw Material Used -->
+                <div id="kpi-box-raw-used" class="hidden bg-white p-4 rounded-3xl shadow-sm border border-emerald-900/10 border-t-4 border-t-amber-600">
+                    <div class="flex items-center justify-between text-slate-400 mb-1">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">Raw Paste Used</span>
+                        <span class="text-lg">📦</span>
+                    </div>
+                    <div id="kpi-raw-used" class="text-xl sm:text-2xl font-black text-amber-800">0 kg</div>
+                    <div id="kpi-raw-barrels-count" class="text-xs font-semibold text-slate-500 mt-0.5">0 Barrels (37° Bx)</div>
+                </div>
+
+                <!-- KPI 6: Raw Material Wasted -->
+                <div id="kpi-box-raw-wasted" class="hidden bg-white p-4 rounded-3xl shadow-sm border border-emerald-900/10 border-t-4 border-t-rose-600">
+                    <div class="flex items-center justify-between text-slate-400 mb-1">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">Raw Paste Wasted</span>
+                        <span class="text-lg">📉</span>
+                    </div>
+                    <div id="kpi-raw-wasted" class="text-xl sm:text-2xl font-black text-rose-700">0 kg</div>
+                    <div class="text-xs font-semibold text-slate-500 mt-0.5">Excess above 25.5°</div>
+                </div>
+
+                <!-- KPI 7: Capital Wasted SDG -->
+                <div id="kpi-box-capital-wasted" class="hidden bg-white p-4 rounded-3xl shadow-sm border border-emerald-900/10 border-t-4 border-t-morouj-forest">
+                    <div class="flex items-center justify-between text-slate-400 mb-1">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">Capital Loss</span>
+                        <span class="text-lg">💸</span>
+                    </div>
+                    <div id="kpi-capital-wasted" class="text-xl sm:text-2xl font-black text-morouj-forest">0 SDG</div>
+                    <div class="text-xs font-semibold text-slate-500 mt-0.5">Financial Impact</div>
+                </div>
+
+            </div>
+
+            <!-- MANAGEMENT CHARTS GRID (Dynamically Filtered by Manager Permissions) -->
+            <div id="management-charts-container" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                <!-- 1. CONCENTRATION PROFILE CHART -->
+                <div id="wrapper-chart-concentration" class="bg-white p-5 rounded-3xl shadow-sm border border-emerald-900/10 flex flex-col">
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <h3 class="text-sm font-extrabold text-morouj-forest uppercase tracking-wider">
+                                Concentration (Brix) Profile Throughout the Day
+                            </h3>
+                            <p class="text-xs text-slate-400">Cooker, Filler, Final Product & Cooker Setpoint vs 25.5° Target</p>
+                        </div>
+                        <span class="p-2 bg-morouj-gold-light text-amber-800 rounded-xl text-xs font-bold">Brix Curve</span>
+                    </div>
+                    <div class="relative flex-grow min-h-[280px]">
+                        <canvas id="chart-concentration-profile"></canvas>
+                    </div>
+                </div>
+
+                <!-- 2. TEMPERATURE PROFILE CHART -->
+                <div id="wrapper-chart-temperature" class="bg-white p-5 rounded-3xl shadow-sm border border-emerald-900/10 flex flex-col">
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <h3 class="text-sm font-extrabold text-morouj-forest uppercase tracking-wider">
+                                Temperature Profile Throughout the Day (°C)
+                            </h3>
+                            <p class="text-xs text-slate-400">Thermal tracking at Cooker, Filler Machine, and Final Product</p>
+                        </div>
+                        <span class="p-2 bg-morouj-orange-light text-morouj-orange-dark rounded-xl text-xs font-bold">Temperature Curve</span>
+                    </div>
+                    <div class="relative flex-grow min-h-[280px]">
+                        <canvas id="chart-temperature-profile"></canvas>
+                    </div>
+                </div>
+
+                <!-- 3. DOWNTIME ANALYSIS CHART -->
+                <div id="wrapper-chart-downtime" class="bg-white p-5 rounded-3xl shadow-sm border border-emerald-900/10 flex flex-col lg:col-span-2">
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <h3 class="text-sm font-extrabold text-morouj-forest uppercase tracking-wider">
+                                Production Line Downtime (Minutes / Hour)
+                            </h3>
+                            <p class="text-xs text-slate-400">Hourly breakdown of operational stoppages and mechanical maintenance</p>
+                        </div>
+                        <span class="p-2 bg-rose-50 text-rose-700 rounded-xl text-xs font-bold">Downtime Graph</span>
+                    </div>
+                    <div class="relative flex-grow min-h-[260px]">
+                        <canvas id="chart-downtime-analysis"></canvas>
+                    </div>
+                </div>
+
+                <!-- 4. RAW TOMATO PASTE USED -->
+                <div id="wrapper-chart-raw-used" class="hidden bg-white p-5 rounded-3xl shadow-sm border border-emerald-900/10 flex flex-col">
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <h3 class="text-sm font-extrabold text-morouj-forest uppercase tracking-wider">
+                                Raw Tomato Paste Used (kg/hr)
+                            </h3>
+                            <p class="text-xs text-slate-400">Formula: Barrels Used × 242 kg (37° Brix)</p>
+                        </div>
+                        <span class="p-2 bg-morouj-orange-light text-morouj-orange-dark rounded-xl text-xs font-bold">Bar Graph</span>
+                    </div>
+                    <div class="relative flex-grow min-h-[280px]">
+                        <canvas id="chart-raw-used"></canvas>
+                    </div>
+                </div>
+
+                <!-- 5. PRODUCT PRODUCED -->
+                <div id="wrapper-chart-product-produced" class="hidden bg-white p-5 rounded-3xl shadow-sm border border-emerald-900/10 flex flex-col">
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <h3 class="text-sm font-extrabold text-morouj-forest uppercase tracking-wider">
+                                Finished Product Output (kg/hr)
+                            </h3>
+                            <p class="text-xs text-slate-400">Can Pallets (792kg) + Packet Pallets (550kg)</p>
+                        </div>
+                        <span class="p-2 bg-morouj-green-light text-morouj-forest rounded-xl text-xs font-bold">Line Graph</span>
+                    </div>
+                    <div class="relative flex-grow min-h-[280px]">
+                        <canvas id="chart-product-produced"></canvas>
+                    </div>
+                </div>
+
+                <!-- 6. RAW MATERIAL WASTED -->
+                <div id="wrapper-chart-raw-wasted" class="hidden bg-white p-5 rounded-3xl shadow-sm border border-emerald-900/10 flex flex-col">
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <h3 class="text-sm font-extrabold text-morouj-forest uppercase tracking-wider">
+                                Raw Material Wasted (kg/hr)
+                            </h3>
+                            <p class="text-xs text-slate-400">Mass Balance: ((Measured Brix - 25.5) / 37.0) × Product (kg)</p>
+                        </div>
+                        <span class="p-2 bg-rose-50 text-rose-700 rounded-xl text-xs font-bold">Bar Chart</span>
+                    </div>
+                    <div class="relative flex-grow min-h-[280px]">
+                        <canvas id="chart-raw-wasted"></canvas>
+                    </div>
+                </div>
+
+                <!-- 7. CAPITAL WASTED IN SDG -->
+                <div id="wrapper-chart-capital-wasted" class="hidden bg-white p-5 rounded-3xl shadow-sm border border-emerald-900/10 flex flex-col lg:col-span-2">
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <h3 class="text-sm font-extrabold text-morouj-forest uppercase tracking-wider">
+                                Capital Wasted in SDG
+                            </h3>
+                            <p class="text-xs text-slate-400">Formula: Raw Material Wasted (kg) × (Price of Barrel / 242 kg)</p>
+                        </div>
+                        <span class="p-2 bg-morouj-forest text-white rounded-xl text-xs font-bold">Loss Graph</span>
+                    </div>
+                    <div class="relative min-h-[280px]">
+                        <canvas id="chart-capital-wasted"></canvas>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- MANAGER PARAMETER SETPOINT MANAGEMENT UI PANEL (COMPACT & COLLAPSIBLE) -->
+            <div id="wrapper-manager-setpoints" class="bg-white rounded-2xl p-4 shadow-sm border border-emerald-900/10 space-y-3">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div class="flex items-center space-x-2.5 cursor-pointer select-none" onclick="toggleSetpointsCollapse()">
+                        <span class="text-xl p-1.5 bg-morouj-gold-light text-amber-800 rounded-xl border border-morouj-gold/30">🎯</span>
+                        <div>
+                            <div class="flex items-center space-x-2">
+                                <h3 class="text-sm font-black text-morouj-forest">Parameter Acceptable Ranges & Setpoints</h3>
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">6 Quality Metrics</span>
+                                <span id="setpoints-collapse-indicator" class="text-xs text-slate-400 font-bold hover:text-morouj-forest transition">▼</span>
+                            </div>
+                            <p class="text-[11px] text-slate-400">Weekly/monthly limit configuration for automated push abnormality alerts.</p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center space-x-2 self-end sm:self-auto">
+                        <button type="button" onclick="testManagerAbnormalityAlert()" title="Test notification dispatch" class="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl border border-rose-200 transition flex items-center space-x-1">
+                            <span>⚠️</span>
+                            <span class="hidden md:inline">Test Alert</span>
+                        </button>
+                        <button type="button" onclick="saveManagerSetpoints()" class="px-3.5 py-1.5 bg-morouj-forest hover:bg-morouj-forest-light text-white font-bold text-xs rounded-xl shadow transition flex items-center space-x-1.5">
+                            <i data-lucide="save" class="w-3.5 h-3.5 text-morouj-lime"></i>
+                            <span>Save Limits</span>
+                        </button>
+                        <button type="button" onclick="toggleSetpointsCollapse()" id="btn-toggle-setpoints" class="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition" title="Collapse / Expand">
+                            <i data-lucide="chevron-down" id="icon-setpoints-chevron" class="w-4 h-4 transition-transform"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Setpoints Form Grid (Compact 6-Metric View) -->
+                <div id="setpoints-editor-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+                    <!-- Populated dynamically by app.js -->
+                </div>
+            </div>
+
+
+            <!-- DOWNTIME EVENT LOG TABLE (Toggled by manager permissions) -->
+            <div id="wrapper-table-downtime" class="bg-white rounded-3xl p-5 shadow-sm border border-emerald-900/10">
+                <h3 class="text-base font-black text-morouj-forest mb-1">Downtime Stoppages Log</h3>
+                <p class="text-xs text-slate-500 mb-4">Detailed timestamps and causes of plant downtime</p>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                                <th class="p-3">Start Time</th>
+                                <th class="p-3">End Time</th>
+                                <th class="p-3">Duration (min)</th>
+                                <th class="p-3">Logged By</th>
+                                <th class="p-3">Reason / Cause</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mgmt-downtime-table-body" class="divide-y divide-slate-100">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </section>
+
+
+        <!-- ============================================== -->
+        <!-- VIEW 4: MODERATOR DASHBOARD (FEATURE TOGGLES & ADMIN) -->
+        <!-- ============================================== -->
+        <section id="view-moderator" class="hidden space-y-6">
+
+            <!-- Moderator Subnav -->
+            <div class="bg-white rounded-3xl p-4 shadow-sm border border-emerald-900/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                    <h1 class="text-xl font-black text-morouj-forest flex items-center space-x-2">
+                        <span>🛡️ Moderator Command Center</span>
+                        <span class="text-xs bg-morouj-green-light text-morouj-forest font-bold px-2.5 py-0.5 rounded-full border border-morouj-green/30">Plant Admin</span>
+                    </h1>
+                    <p class="text-xs text-slate-500 mt-0.5">Manage users, toggle operator readings, and customize manager charts & info boxes</p>
+                </div>
+
+                <div class="flex items-center space-x-2">
+                    <button onclick="switchModTab('users')" id="mod-tab-btn-users" class="px-3 py-1.5 rounded-xl font-bold text-xs bg-morouj-forest text-white shadow">
+                        👥 User Management & Feature Toggles
+                    </button>
+                    <button onclick="switchModTab('compliance')" id="mod-tab-btn-compliance" class="px-3 py-1.5 rounded-xl font-bold text-xs bg-slate-100 text-slate-700 hover:bg-slate-200">
+                        ⏱️ Timeliness Monitor
+                    </button>
+                    <button onclick="switchModTab('audits')" id="mod-tab-btn-audits" class="px-3 py-1.5 rounded-xl font-bold text-xs bg-slate-100 text-slate-700 hover:bg-slate-200">
+                        📋 Ingestion Stream
+                    </button>
+                    <button onclick="switchModTab('settings')" id="mod-tab-btn-settings" class="px-3 py-1.5 rounded-xl font-bold text-xs bg-slate-100 text-slate-700 hover:bg-slate-200">
+                        ⚙️ Plant Settings
+                    </button>
+                </div>
+            </div>
+
+            <!-- TAB 1: USER MANAGEMENT & PERMISSION TOGGLES -->
+            <div id="mod-tab-users" class="space-y-4">
+                <div class="bg-white rounded-3xl p-5 shadow-sm border border-emerald-900/10">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
+                        <div>
+                            <h3 class="text-base font-black text-morouj-forest">Plant Users & Measurement Permissions</h3>
+                            <p class="text-xs text-slate-500">Configure operator input fields OR manager charts & KPI boxes based on role type</p>
+                        </div>
+                        <button onclick="openCreateUserModal()" class="flex items-center space-x-1.5 px-3.5 py-2 bg-morouj-green hover:bg-morouj-green-hover text-white font-bold text-xs rounded-xl shadow transition">
+                            <i data-lucide="user-plus" class="w-4 h-4"></i>
+                            <span>Add New User</span>
+                        </button>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                                    <th class="p-3">User</th>
+                                    <th class="p-3">Role</th>
+                                    <th class="p-3">PIN</th>
+                                    <th class="p-3">Enabled Features / Charts</th>
+                                    <th class="p-3">Status</th>
+                                    <th class="p-3 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mod-users-table-body" class="divide-y divide-slate-100">
+                                <!-- Populated dynamically by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: TIMELINESS COMPLIANCE -->
+            <div id="mod-tab-compliance" class="hidden space-y-4">
+                <div class="bg-white rounded-3xl p-5 shadow-sm border border-emerald-900/10">
+                    <div class="flex justify-between items-center mb-4">
+                        <div>
+                            <h3 class="text-base font-black text-morouj-forest">15-Minute Grace Period Compliance Tracker</h3>
+                            <p class="text-xs text-slate-500">Flags users who are not uploading their operational measurements within 15 minutes of the hour mark</p>
+                        </div>
+                        <button onclick="loadModeratorCompliance()" class="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl">
+                            <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                                    <th class="p-3">Hour Slot</th>
+                                    <th class="p-3">Raw Material</th>
+                                    <th class="p-3">Cooker Operator</th>
+                                    <th class="p-3">Can Filler Operator</th>
+                                    <th class="p-3">Universal Packet Filler</th>
+                                    <th class="p-3">Quality Controller</th>
+                                    <th class="p-3">Palletizer Operator</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mod-compliance-table-body" class="divide-y divide-slate-100">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: AUDIT STREAM -->
+            <div id="mod-tab-audits" class="hidden space-y-4">
+                <div class="bg-white rounded-3xl p-5 shadow-sm border border-emerald-900/10">
+                    <div class="flex justify-between items-center mb-4">
+                        <div>
+                            <h3 class="text-base font-black text-morouj-forest">Live Ingestion Audit Log</h3>
+                            <p class="text-xs text-slate-500">Complete historical trail of who submitted what measurement, exact timestamp, and timeliness</p>
+                        </div>
+                        <button onclick="loadModeratorAudits()" class="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl">
+                            <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                                    <th class="p-3">Timestamp</th>
+                                    <th class="p-3">Slot</th>
+                                    <th class="p-3">Operator Name</th>
+                                    <th class="p-3">Role</th>
+                                    <th class="p-3">Logged Readings</th>
+                                    <th class="p-3">Timeliness Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mod-audits-table-body" class="divide-y divide-slate-100">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 4: PLANT SETTINGS -->
+            <div id="mod-tab-settings" class="hidden space-y-4">
+                <div class="bg-white rounded-3xl p-5 shadow-sm border border-emerald-900/10 max-w-xl">
+                    <h3 class="text-base font-black text-morouj-forest mb-1">Process Engineering Constants</h3>
+                    <p class="text-xs text-slate-500 mb-5">Configure standard plant parameters used across mass balance equations</p>
+
+                    <form onsubmit="handleSaveSettings(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Raw Material Barrel Net Weight (kg)</label>
+                            <input type="number" id="setting-barrel-weight" step="0.1" value="242.0" class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm font-semibold">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Raw Paste Concentration (Brix)</label>
+                            <input type="number" id="setting-raw-brix" step="0.1" value="37.0" class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm font-semibold">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Standard Product Target Concentration (Brix)</label>
+                            <input type="number" id="setting-target-brix" step="0.1" value="25.5" class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm font-semibold">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Default Market Price per Barrel (SDG)</label>
+                            <input type="number" id="setting-barrel-price" step="10000" value="1500000" class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm font-semibold">
+                        </div>
+                        <button type="submit" class="w-full py-3 bg-morouj-forest hover:bg-morouj-forest-light text-white font-bold rounded-xl shadow transition">
+                            Save Plant Constants
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- CREATE / EDIT USER MODAL WITH CONTEXT-AWARE FEATURE TOGGLES -->
+    <div id="modal-create-user" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center">
+                <h3 id="user-modal-title" class="text-lg font-black text-morouj-forest">Configure Plant User & Permissions</h3>
+                <button onclick="closeCreateUserModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold">×</button>
+            </div>
+
+            <form onsubmit="handleSaveUser(event)" class="space-y-4">
+                <input type="hidden" id="edit-user-id">
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Full Name</label>
+                        <input type="text" id="new-user-fullname" required placeholder="e.g. Production Team Leader" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Username</label>
+                        <input type="text" id="new-user-username" required placeholder="e.g. manager" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Role Type</label>
+                        <select id="new-user-role" onchange="handleRoleTypeChange(this.value)" required class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white font-bold text-morouj-forest">
+                            <option value="operator">Operator</option>
+                            <option value="management">Management</option>
+                            <option value="moderator">Moderator</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Password</label>
+                        <input type="password" id="new-user-password" value="password123" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Quick PIN (4 Digits)</label>
+                        <input type="text" id="new-user-pin" placeholder="2000" maxlength="4" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm">
+                    </div>
+                </div>
+
+                <!-- SECTION A: OPERATOR ASSIGNED READINGS (Shown when Role = Operator) -->
+                <div id="modal-operator-permissions" class="pt-2 border-t border-slate-100">
+                    <label class="block text-xs font-extrabold text-morouj-forest uppercase tracking-wider mb-2">
+                        Assigned Readings & Feature Toggles for this Operator
+                    </label>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                            <input type="checkbox" id="perm-concentration-cooker" class="w-4 h-4 accent-morouj-green">
+                            <span class="font-semibold text-slate-700">Concentration at Cooker (°Bx)</span>
+                        </label>
+                        <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                            <input type="checkbox" id="perm-cooker-setpoint" class="w-4 h-4 accent-morouj-green">
+                            <span class="font-semibold text-slate-700">Cooker Setpoint Brix (°Bx)</span>
+                        </label>
+                        <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                            <input type="checkbox" id="perm-concentration-filler" class="w-4 h-4 accent-morouj-green">
+                            <span class="font-semibold text-slate-700">Concentration at Filler (°Bx)</span>
+                        </label>
+                        <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                            <input type="checkbox" id="perm-concentration-final" class="w-4 h-4 accent-morouj-green">
+                            <span class="font-semibold text-slate-700">Final Product Concentration (°Bx)</span>
+                        </label>
+                        <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                            <input type="checkbox" id="perm-temperature-cooker" class="w-4 h-4 accent-morouj-green">
+                            <span class="font-semibold text-slate-700">Temperature at Cooker (°C)</span>
+                        </label>
+                        <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                            <input type="checkbox" id="perm-temperature-filler" class="w-4 h-4 accent-morouj-green">
+                            <span class="font-semibold text-slate-700">Temperature at Filler (°C)</span>
+                        </label>
+                        <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                            <input type="checkbox" id="perm-temperature-final" class="w-4 h-4 accent-morouj-green">
+                            <span class="font-semibold text-slate-700">Final Product Temp (°C)</span>
+                        </label>
+                        <label class="flex items-center space-x-2 p-2 bg-rose-50 hover:bg-rose-100 rounded-xl cursor-pointer border border-rose-200">
+                            <input type="checkbox" id="perm-downtime-tracking" class="w-4 h-4 accent-rose-600">
+                            <span class="font-bold text-rose-800">Downtime Tracking</span>
+                        </label>
+                        <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                            <input type="checkbox" id="perm-raw-barrels" class="w-4 h-4 accent-morouj-green">
+                            <span class="font-semibold text-slate-700">Raw Paste Barrels Count</span>
+                        </label>
+                        <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                            <input type="checkbox" id="perm-can-filler" class="w-4 h-4 accent-morouj-green">
+                            <span class="font-semibold text-slate-700">Can Filler Machine Count</span>
+                        </label>
+                        <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                            <input type="checkbox" id="perm-packet-filler" class="w-4 h-4 accent-morouj-green">
+                            <span class="font-semibold text-slate-700">Universal Packets Count</span>
+                        </label>
+                        <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                            <input type="checkbox" id="perm-palletizer" class="w-4 h-4 accent-morouj-green">
+                            <span class="font-semibold text-slate-700">Can & Packet Pallets</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- SECTION B: MANAGEMENT CHARTS & INFORMATION BOXES (Shown when Role = Management) -->
+                <div id="modal-management-permissions" class="hidden pt-2 border-t border-slate-100 space-y-3">
+                    
+                    <!-- Group 1: KPI & Summary Information Boxes -->
+                    <div>
+                        <label class="block text-xs font-extrabold text-morouj-forest uppercase tracking-wider mb-2">
+                            📊 Summary Information & KPI Boxes for Manager
+                        </label>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                            <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                                <input type="checkbox" id="perm-kpi-avg-brix" class="w-4 h-4 accent-morouj-green">
+                                <span class="font-semibold text-slate-700">Day Average Brix (°Bx)</span>
+                            </label>
+                            <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                                <input type="checkbox" id="perm-kpi-avg-temperature" class="w-4 h-4 accent-morouj-green">
+                                <span class="font-semibold text-slate-700">Average Temperatures (°C)</span>
+                            </label>
+                            <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                                <input type="checkbox" id="perm-kpi-total-downtime" class="w-4 h-4 accent-morouj-green">
+                                <span class="font-semibold text-slate-700">Total Downtime (min)</span>
+                            </label>
+                            <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                                <input type="checkbox" id="perm-kpi-product-produced" class="w-4 h-4 accent-morouj-green">
+                                <span class="font-semibold text-slate-700">Finished Product Produced (kg)</span>
+                            </label>
+                            <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                                <input type="checkbox" id="perm-kpi-raw-used" class="w-4 h-4 accent-morouj-green">
+                                <span class="font-semibold text-slate-700">Raw Paste Used (kg)</span>
+                            </label>
+                            <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                                <input type="checkbox" id="perm-kpi-raw-wasted" class="w-4 h-4 accent-morouj-green">
+                                <span class="font-semibold text-slate-700">Raw Material Wasted (kg)</span>
+                            </label>
+                            <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                                <input type="checkbox" id="perm-kpi-capital-wasted" class="w-4 h-4 accent-morouj-green">
+                                <span class="font-semibold text-slate-700">Capital Wasted in SDG</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Group 2: Charts & Visual Analytics -->
+                    <div>
+                        <label class="block text-xs font-extrabold text-morouj-forest uppercase tracking-wider mb-2">
+                            📈 Charts & Analytics Views for Manager
+                        </label>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                            <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                                <input type="checkbox" id="perm-chart-concentration" class="w-4 h-4 accent-morouj-green">
+                                <span class="font-semibold text-slate-700">Concentration (Brix) Profile Chart</span>
+                            </label>
+                            <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                                <input type="checkbox" id="perm-chart-temperature" class="w-4 h-4 accent-morouj-green">
+                                <span class="font-semibold text-slate-700">Temperature Profile Chart (°C)</span>
+                            </label>
+                            <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                                <input type="checkbox" id="perm-chart-downtime" class="w-4 h-4 accent-morouj-green">
+                                <span class="font-semibold text-slate-700">Downtime Analysis Chart</span>
+                            </label>
+                            <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                                <input type="checkbox" id="perm-chart-raw-used" class="w-4 h-4 accent-morouj-green">
+                                <span class="font-semibold text-slate-700">Raw Paste Used per Hour</span>
+                            </label>
+                            <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                                <input type="checkbox" id="perm-chart-product-produced" class="w-4 h-4 accent-morouj-green">
+                                <span class="font-semibold text-slate-700">Finished Product per Hour</span>
+                            </label>
+                            <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                                <input type="checkbox" id="perm-chart-raw-wasted" class="w-4 h-4 accent-morouj-green">
+                                <span class="font-semibold text-slate-700">Raw Material Wasted per Hour</span>
+                            </label>
+                            <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                                <input type="checkbox" id="perm-chart-capital-wasted" class="w-4 h-4 accent-morouj-green">
+                                <span class="font-semibold text-slate-700">Capital Wasted in SDG</span>
+                            </label>
+                            <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                                <input type="checkbox" id="perm-table-downtime-log" class="w-4 h-4 accent-morouj-green">
+                                <span class="font-semibold text-slate-700">Downtime Stoppages Log Table</span>
+                            </label>
+                            <label class="flex items-center space-x-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer">
+                                <input type="checkbox" id="perm-export-buttons" class="w-4 h-4 accent-morouj-green">
+                                <span class="font-semibold text-slate-700">Excel / CSV Export Buttons</span>
+                            </label>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- SECTION C: MODERATOR NOTICE (Shown when Role = Moderator) -->
+                <div id="modal-moderator-permissions" class="hidden pt-2 border-t border-slate-100">
+                    <div class="p-3 bg-morouj-green-light border border-morouj-green/30 rounded-2xl text-xs font-semibold text-morouj-forest">
+                        🛡️ Moderator accounts automatically have full access to all operator stations, analytics dashboards, user permissions, and plant settings.
+                    </div>
+                </div>
+
+                <div class="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="closeCreateUserModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl">Cancel</button>
+                    <button type="submit" class="px-5 py-2 bg-morouj-green hover:bg-morouj-green-hover text-white text-xs font-bold rounded-xl shadow">Save User & Permissions</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- FORCED PASSWORD CHANGE MODAL (shown when must_change_password is set) -->
+    <div id="change-password-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div class="flex justify-between items-center">
+                <h3 class="text-lg font-black text-morouj-forest">Set a New Password</h3>
+                <span class="text-2xl">🔐</span>
+            </div>
+            <p class="text-xs font-semibold text-slate-500 bg-orange-light border border-morouj-orange/30 rounded-2xl p-3">
+                For your security, the default credentials must be replaced before continuing. You can also change your username later from the user management panel.
+            </p>
+            <form onsubmit="handleChangePassword(event)" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Current Password</label>
+                    <input type="password" id="change-password-current" required placeholder="Current password" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">New Password (min 8 characters)</label>
+                    <input type="password" id="change-password-new" required minlength="8" placeholder="New password" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Confirm New Password</label>
+                    <input type="password" id="change-password-confirm" required minlength="8" placeholder="Confirm new password" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm">
+                </div>
+                <button type="submit" class="w-full px-5 py-2.5 bg-morouj-green hover:bg-morouj-green-hover text-white text-sm font-bold rounded-xl shadow">Update Password</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 hidden transform transition-all duration-300 max-w-sm w-full bg-morouj-forest text-white p-4 rounded-2xl shadow-2xl border border-morouj-forest-light flex items-center space-x-3">
+        <div id="toast-icon" class="text-xl text-morouj-lime">✓</div>
+        <div id="toast-message" class="text-sm font-medium">Log submitted successfully!</div>
+    </div>
+
+    <!-- Application Script -->
+    <script src="/app.js"></script>
+</body>
+</html>

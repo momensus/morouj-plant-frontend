@@ -1,0 +1,10 @@
+# Cloudflare Pages redirects/proxies
+# This deployment publishes the repo ROOT (assets at /index.html, /icons/, ...).
+
+# 1) Proxy all /api/* requests to the Render backend.
+#    200 = proxy rewrite; the browser stays on your Pages domain (no CORS).
+#    TODO: replace <YOUR-RENDER-URL> with your deployed Render service URL.
+/api/* https://<YOUR-RENDER-URL>/api/:splat 200
+
+# 2) SPA fallback: any unknown path serves the shell (index.html).
+/* /index.html 200

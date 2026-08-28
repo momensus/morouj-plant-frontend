@@ -1,0 +1,9 @@
+# Node / build artifacts (none committed)
+node_modules/
+dist/
+build/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
