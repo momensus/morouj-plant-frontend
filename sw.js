@@ -3,8 +3,8 @@
 // Strategy: Cache-First for static assets, Network-First for API
 // ============================================================
 
-const CACHE_NAME        = 'morouj-plant-v2';
-const STATIC_CACHE_NAME = 'morouj-static-v2';
+const CACHE_NAME        = 'morouj-plant-v3';
+const STATIC_CACHE_NAME = 'morouj-static-v3';
 const SYNC_TAG          = 'morouj-offline-sync';
 
 // Static assets to pre-cache on install
